@@ -8,9 +8,10 @@
    ```bash
    curl -fsSL https://lmstudio.ai/install.sh | bash
    ```
-2. Download a model:
+2. Download and launch a model:
    ```bash
    lms get google/gemma-4-26b-a4b
+   lms load --gpu max -c 256000 --ttl 360000 google/gemma-4-26b-a4b
    ```
 3. Start the API server:
    ```bash
