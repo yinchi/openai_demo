@@ -4,15 +4,9 @@ Executes a simple prompt loop with tools and Markdown rendering in the terminal 
 """
 
 import json
-import os
-import subprocess
-from collections.abc import Callable
 
-import openai
-from dotenv import load_dotenv
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
-    ChatCompletionFunctionToolParam,
     ChatCompletionMessageCustomToolCallParam,
     ChatCompletionMessageFunctionToolCall,
     ChatCompletionMessageFunctionToolCallParam,
@@ -21,84 +15,20 @@ from openai.types.chat import (
     ChatCompletionMessageToolCallUnionParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionToolMessageParam,
-    ChatCompletionToolUnionParam,
     ChatCompletionUserMessageParam,
 )
 from openai.types.chat.chat_completion_message_custom_tool_call_param import Custom as CustomParam
 from openai.types.chat.chat_completion_message_tool_call_param import Function as FunctionParam
-from openai.types.shared_params import FunctionDefinition
-from rich.console import Console
 from rich.markdown import Markdown
 from rich.style import Style
 
-load_dotenv()
-
-OPENAI_URL = os.getenv("OPENAI_URL", "")
-OPENAI_KEY = os.getenv("OPENAI_KEY", "")
-assert OPENAI_URL, "OPENAI_URL environment variable must be set"
-assert OPENAI_KEY, "OPENAI_KEY environment variable must be set"
-CLIENT = openai.OpenAI(base_url=OPENAI_URL, api_key=OPENAI_KEY)
-
-MODEL = os.getenv("OPENAI_MODEL", "")
-assert MODEL, "OPENAI_MODEL environment variable must be set"
+from .common import LLM_MODEL, OPENAI_CLIENT, console
+from .tools import TOOL_HANDLERS, TOOLS
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant. You are running in a console application with "
     "Markdown support via the `rich` Python library."
 )
-
-console = Console()
-
-
-def eza_tool(p: str) -> str:
-    """List files in the given directory."""
-    console.print("[bright_black]Executing eza_tool...[/bright_black]")
-
-    # Check that the path, when resolved, is within the current working directory
-    # to prevent arbitrary file access.
-    resolved_path = os.path.abspath(p)
-    cwd = os.getcwd()
-    if not resolved_path.startswith(cwd):
-        return "Error: Path must be within the current working directory."
-
-    sp = subprocess.run(
-        f"eza -alhgF --smart-group --group-directories-first --color=never {p}",
-        shell=True,
-        capture_output=True,
-        text=True,
-        check=False,  # Don't raise an exception on non-zero exit codes - we'll handle it ourselves
-    )
-    return sp.stdout if sp.returncode == 0 else f"Error executing eza_tool: {sp.stderr}"
-
-
-TOOL_HANDLERS: dict[str, Callable[..., str]] = {
-    "eza_tool": eza_tool,
-}
-
-TOOLS: list[ChatCompletionToolUnionParam] = [
-    ChatCompletionFunctionToolParam(
-        type="function",
-        function=FunctionDefinition(
-            name="eza_tool",
-            description="""\
-List files and directories in the given directory.
-
-Uses the `eza` command-line tool. Prints one entry per line, with a header row at the top.""",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "The path to list files for.",
-                    }
-                },
-                "required": ["path"],
-                "additionalProperties": False,
-            },
-            strict=True,
-        ),
-    )
-]
 
 
 def _execute_tool_call(tool_call: ChatCompletionMessageFunctionToolCall) -> str:
@@ -150,7 +80,6 @@ def tool_call_to_param(
 
 def _handle_prompt(
     *,
-    model: str,
     messages: list[ChatCompletionMessageParam],
 ) -> None:
     """Prompt the OpenAI-compatible API, execute tools, and display the reply.
@@ -164,8 +93,8 @@ def _handle_prompt(
         spinner="dots",
         spinner_style=Style(color="bright_black"),
     ):
-        response = CLIENT.chat.completions.create(
-            model=model,
+        response = OPENAI_CLIENT.chat.completions.create(
+            model=LLM_MODEL,
             messages=messages,
             tools=TOOLS,
         )
@@ -217,8 +146,8 @@ def _handle_prompt(
             spinner="dots",
             spinner_style=Style(color="bright_black"),
         ):
-            response = CLIENT.chat.completions.create(
-                model=model,
+            response = OPENAI_CLIENT.chat.completions.create(
+                model=LLM_MODEL,
                 messages=messages,
                 tools=TOOLS,
             )
@@ -263,5 +192,5 @@ def main() -> None:
             continue
 
         messages.append(ChatCompletionUserMessageParam(role="user", content=user_input))
-        _handle_prompt(model=MODEL, messages=messages)
+        _handle_prompt(messages=messages)
         print()  # Blank line between response and next prompt
