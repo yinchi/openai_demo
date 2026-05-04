@@ -1,5 +1,14 @@
 # OpenAI chat program demo
 
+Command-line chat program that demonstrates how to use the OpenAI API for chat completions,
+with:
+
+- tool support
+- conversation history (with /reset command to reset history)
+- Markdown rendering
+
+![screenshot of the demo](image.png)
+
 ## Setup
 
 ### Set up the LM Studio API server
