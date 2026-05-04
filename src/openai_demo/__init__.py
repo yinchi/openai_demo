@@ -4,6 +4,8 @@ Executes a simple prompt loop with tools and Markdown rendering in the terminal 
 """
 
 import json
+import shlex
+import subprocess
 
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
@@ -25,10 +27,17 @@ from rich.style import Style
 from .common import LLM_MODEL, OPENAI_CLIENT, console
 from .tools import TOOL_HANDLERS, TOOLS
 
-SYSTEM_PROMPT = (
-    "You are a helpful assistant. You are running in a console application with "
-    "Markdown support via the `rich` Python library."
-)
+SYSTEM_PROMPT = """\
+You are a helpful assistant. You are running in a console application with
+Markdown support via the `rich` Python library.
+
+Since all of your output will be rendered as Markdown, use manual line breaks or code blocks to
+preserve formatting when needed, for example when printing a poem or ASCII art.
+
+You will have access to a session-scoped temporary directory. Get the path for this directory
+using the `get_temp_dir` tool.  You can read, write, and list files in the temporary directory and
+the current working directory only (and their subdirectories).
+"""
 
 
 def _execute_tool_call(tool_call: ChatCompletionMessageFunctionToolCall) -> str:
@@ -186,9 +195,33 @@ def main() -> None:
             # Handle Ctrl+D / EOF to exit the program gracefully
             print()
             return
+        
+        user_input = user_input.strip()
 
-        if not user_input.strip():
+        if not user_input:
             # Empty prompt, prompt again without calling the API
+            continue
+
+        if user_input.lower() in {"/exit", "/quit"}:
+            return
+        
+        # Other slash commands, e.g. /reset to reset conversation history
+        if user_input.startswith("/"):
+            command = user_input.split()[0][1:].lower()  # Get the command without the leading slash
+            _args = shlex.split(user_input)[1:]  # Get the rest of the command arguments
+
+            if command == "reset":
+                messages = [ChatCompletionSystemMessageParam(role="system", content=SYSTEM_PROMPT)]
+                console.print("[bright_black]Conversation history reset.[/bright_black]")
+            else:
+                console.print(Markdown(f"**Unknown command:** {user_input}"), style="red")
+            continue
+
+        # Exclamation mark to execute a shell command and print the output, without adding to
+        # conversation history
+        if user_input.startswith("!"):
+            shell_command = user_input[1:]
+            subprocess.run(["bash", "-c", shell_command])
             continue
 
         messages.append(ChatCompletionUserMessageParam(role="user", content=user_input))
