@@ -8,12 +8,22 @@ from dotenv import load_dotenv
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
     ChatCompletionFunctionToolParam,
+    ChatCompletionMessageCustomToolCallParam,
     ChatCompletionMessageFunctionToolCall,
+    ChatCompletionMessageFunctionToolCallParam,
     ChatCompletionMessageParam,
+    ChatCompletionMessageToolCallUnion,
+    ChatCompletionMessageToolCallUnionParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionToolMessageParam,
     ChatCompletionToolUnionParam,
     ChatCompletionUserMessageParam,
+)
+from openai.types.chat.chat_completion_message_custom_tool_call_param import (
+    Custom as CustomParam,
+)
+from openai.types.chat.chat_completion_message_tool_call_param import (
+    Function as FunctionParam,
 )
 from openai.types.shared_params import FunctionDefinition
 from rich.console import Console
@@ -110,6 +120,30 @@ def _execute_tool_call(tool_call: ChatCompletionMessageFunctionToolCall) -> str:
     return str(result)
 
 
+def tool_call_to_param(
+    tool_call: ChatCompletionMessageToolCallUnion,
+) -> ChatCompletionMessageToolCallUnionParam:
+    """Convert a ChatCompletionMessageFunctionToolCall to a ChatCompletionFunctionToolParam."""
+    if isinstance(tool_call, ChatCompletionMessageFunctionToolCall):
+        return ChatCompletionMessageFunctionToolCallParam(
+            type=tool_call.type,
+            id=tool_call.id,
+            function=FunctionParam(
+                name=tool_call.function.name,
+                arguments=tool_call.function.arguments,
+            ),
+        )
+    else:
+        return ChatCompletionMessageCustomToolCallParam(
+            type=tool_call.type,
+            id=tool_call.id,
+            custom=CustomParam(
+                name=tool_call.custom.name,
+                input=tool_call.custom.input,
+            ),
+        )
+
+
 def _handle_prompt(
     *,
     model: str | None,
@@ -144,7 +178,7 @@ def _handle_prompt(
             ChatCompletionAssistantMessageParam(
                 role="assistant",
                 content=response_message.content,
-                tool_calls=response_message.tool_calls,
+                tool_calls=list(map(tool_call_to_param, response_message.tool_calls)),
             )
         )
 
