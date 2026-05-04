@@ -33,14 +33,18 @@ from rich.style import Style
 
 load_dotenv()
 
-OPENAI_URL = os.getenv("OPENAI_URL")
-OPENAI_KEY = os.getenv("OPENAI_KEY")
+OPENAI_URL = os.getenv("OPENAI_URL", "")
+OPENAI_KEY = os.getenv("OPENAI_KEY", "")
+assert OPENAI_URL, "OPENAI_URL environment variable must be set"
+assert OPENAI_KEY, "OPENAI_KEY environment variable must be set"
 CLIENT = openai.OpenAI(base_url=OPENAI_URL, api_key=OPENAI_KEY)
-MODEL = os.getenv("OPENAI_MODEL")
+
+MODEL = os.getenv("OPENAI_MODEL", "")
+assert MODEL, "OPENAI_MODEL environment variable must be set"
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant. You are running in a console application with "
-    "Rich Markdown support."
+    "Markdown support via the `rich` Python library."
 )
 
 console = Console()
@@ -146,7 +150,7 @@ def tool_call_to_param(
 
 def _handle_prompt(
     *,
-    model: str | None,
+    model: str,
     messages: list[ChatCompletionMessageParam],
 ) -> None:
     """Prompt the OpenAI-compatible API, execute tools, and display the reply.
