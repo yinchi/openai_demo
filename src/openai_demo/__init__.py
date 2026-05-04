@@ -1,3 +1,8 @@
+"""OpenAI API demo script with tool calls.
+
+Executes a simple prompt loop with tools and Markdown rendering in the terminal using Rich.
+"""
+
 import json
 import os
 import subprocess
@@ -19,12 +24,8 @@ from openai.types.chat import (
     ChatCompletionToolUnionParam,
     ChatCompletionUserMessageParam,
 )
-from openai.types.chat.chat_completion_message_custom_tool_call_param import (
-    Custom as CustomParam,
-)
-from openai.types.chat.chat_completion_message_tool_call_param import (
-    Function as FunctionParam,
-)
+from openai.types.chat.chat_completion_message_custom_tool_call_param import Custom as CustomParam
+from openai.types.chat.chat_completion_message_tool_call_param import Function as FunctionParam
 from openai.types.shared_params import FunctionDefinition
 from rich.console import Console
 from rich.markdown import Markdown
@@ -61,6 +62,7 @@ def eza_tool(p: str) -> str:
         shell=True,
         capture_output=True,
         text=True,
+        check=False,  # Don't raise an exception on non-zero exit codes - we'll handle it ourselves
     )
     return sp.stdout if sp.returncode == 0 else f"Error executing eza_tool: {sp.stderr}"
 
@@ -78,17 +80,17 @@ TOOLS: list[ChatCompletionToolUnionParam] = [
 List files and directories in the given directory.
 
 Uses the `eza` command-line tool. Prints one entry per line, with a header row at the top.""",
-            parameters=dict(
-                type="object",
-                properties={
+            parameters={
+                "type": "object",
+                "properties": {
                     "path": {
                         "type": "string",
                         "description": "The path to list files for.",
                     }
                 },
-                required=["path"],
-                additionalProperties=False,
-            ),
+                "required": ["path"],
+                "additionalProperties": False,
+            },
             strict=True,
         ),
     )
@@ -97,7 +99,6 @@ Uses the `eza` command-line tool. Prints one entry per line, with a header row a
 
 def _execute_tool_call(tool_call: ChatCompletionMessageFunctionToolCall) -> str:
     """Execute a tool call requested by the model."""
-
     function_name = tool_call.function.name
     function_args = tool_call.function.arguments or "{}"
 
@@ -133,15 +134,14 @@ def tool_call_to_param(
                 arguments=tool_call.function.arguments,
             ),
         )
-    else:
-        return ChatCompletionMessageCustomToolCallParam(
-            type=tool_call.type,
-            id=tool_call.id,
-            custom=CustomParam(
-                name=tool_call.custom.name,
-                input=tool_call.custom.input,
-            ),
-        )
+    return ChatCompletionMessageCustomToolCallParam(
+        type=tool_call.type,
+        id=tool_call.id,
+        custom=CustomParam(
+            name=tool_call.custom.name,
+            input=tool_call.custom.input,
+        ),
+    )
 
 
 def _handle_prompt(
@@ -155,7 +155,6 @@ def _handle_prompt(
         model: The model to use for the response.
         messages: The full conversation history in chat-completions format.
     """
-
     with console.status(
         "[bright_black]Thinking...",
         spinner="dots",
@@ -225,16 +224,12 @@ def _handle_prompt(
     # Once there are no more tool calls, display the final response content.
     if response_message.content:
         messages.append(
-            ChatCompletionAssistantMessageParam(
-                role="assistant", content=response_message.content
-            )
+            ChatCompletionAssistantMessageParam(role="assistant", content=response_message.content)
         )
         console.print(Markdown(response_message.content))
     elif response_message.refusal:
         messages.append(
-            ChatCompletionAssistantMessageParam(
-                role="assistant", refusal=response_message.refusal
-            )
+            ChatCompletionAssistantMessageParam(role="assistant", refusal=response_message.refusal)
         )
         console.print(
             Markdown(f"**Model refused to answer:** {response_message.refusal}"),
@@ -247,7 +242,6 @@ def _handle_prompt(
 
 def main() -> None:
     """Entry point for the demo script."""
-
     messages: list[ChatCompletionMessageParam] = [
         ChatCompletionSystemMessageParam(role="system", content=SYSTEM_PROMPT),
     ]

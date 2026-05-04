@@ -26,3 +26,10 @@ dev = [
     "mypy>=1.20.2",
     "ruff>=0.15.12",
 ]
+
+[tool.isort]
+filter_files=true
+line_length=100
+# Match ruff --format settings
+multi_line_output = 3
+include_trailing_comma = true
