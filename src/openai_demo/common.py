@@ -25,5 +25,5 @@ console = Console()
 # Generate a random temporary directory for this run of the demo.
 # Do not create the directory yet, as it will be created on demand when the first file is written.
 rand_str = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(12))
-TEMP_DIR = f"{tempfile.gettempdir()}/openai_demo_{rand_str}"
+TEMP_DIR = f"{tempfile.gettempdir()}/openai_demo/{rand_str}"
 console.print(f"Using temporary directory: {TEMP_DIR}")
