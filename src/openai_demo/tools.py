@@ -225,8 +225,9 @@ def read_file(path: str) -> str:
             description="""\
 Write content to a file at the given path.
 
-The path must be within the current working directory. The file will only be written if it does not
-already exist to prevent overwriting existing files.""",
+The path must be within the current working directory or the designated temporary directory.
+The file will only be written if it does not already exist to prevent overwriting existing
+files.""",
             parameters={
                 "type": "object",
                 "properties": {
