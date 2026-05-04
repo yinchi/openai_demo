@@ -1,5 +1,6 @@
 """Defines tools that the assistant can call."""
 
+import json
 import os
 import subprocess
 from collections.abc import Callable
@@ -10,6 +11,8 @@ from openai.types.chat import (
     ChatCompletionToolUnionParam,
 )
 from openai.types.shared_params import FunctionDefinition
+from rich import prompt
+from rich.markdown import Markdown
 
 from .common import TEMP_DIR, console
 
@@ -42,7 +45,10 @@ def register_tool(
 List files and directories in the given directory.
 
 Uses the `eza` command-line tool. Prints one entry per line, with a header row at the top.
-Directories are listed with trailing slashes and with a 'd' in the permissions column.""",
+Directories are listed with trailing slashes and with a 'd' in the permissions column.
+
+Equivalent to `eza -alhgF --smart-group --group-directories-first --color=never {pathname}`.
+""",
             parameters={
                 "type": "object",
                 "properties": {
@@ -90,7 +96,8 @@ def eza_tool(pathname: str) -> str:
             description="""\
 Evaluate a mathematical expression using the `bc` command-line tool.
 
-Executes `echo '{expression}' | bc -l` and returns the output.
+Executes `echo '{expression}' | bc -l` and returns the output.  Use the `man_tool` to get more
+information about how to format the expression for `bc`.
 """,
             parameters={
                 "type": "object",
@@ -285,3 +292,103 @@ def write_file(path: str, content: str) -> str:
         return f"File written successfully to {resolved_path}"
     except Exception as e:
         return f"Error writing file: {e}"
+
+
+@register_tool(
+    ChatCompletionFunctionToolParam(
+        type="function",
+        function=FunctionDefinition(
+            name="python_tool",
+            description="""\
+Execute the given Python code and return the output.
+
+Prompts the user for confirmation before executing the code to prevent accidental execution of
+harmful code. The code is automatically wrapped in a Markdown code block when printed to the
+console for confirmation.
+
+The code is executed using `subprocess.run` with a call to the Python interpreter,
+and the output is captured and returned as a JSON object with `stdout`, `stderr`, and `returncode`
+fields.  If execution is refused by the user, returns a JSON object with a `refused` field.
+""",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "The Python code to execute.",
+                    }
+                },
+                "required": ["code"],
+                "additionalProperties": False,
+            },
+            strict=True,
+        ),
+    )
+)
+def python_tool(code: str) -> str:
+    """Execute the given Python code and return the output."""
+    console.print(f"[bright_black]Executing python_tool...[/bright_black]")
+    console.print("[red bold]Execute the following Python code?[/red bold]")
+    console.print(Markdown(f"```py\n{code}\n```"))
+    confirm = prompt.Confirm.ask("[bold red]Execute?[/bold red]", default=False)
+    if not confirm:
+        return json.dumps({"refused": "Execution cancelled by user."})
+    try:
+        subprocess_result = subprocess.run(
+            ["/usr/bin/python3", "-c", code],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return json.dumps(
+            {
+                "stdout": subprocess_result.stdout,
+                "stderr": subprocess_result.stderr,
+                "returncode": subprocess_result.returncode,
+            }
+        )
+    except Exception as e:
+        return json.dumps({"error": f"Error executing code: {e}"})
+
+@register_tool(
+    ChatCompletionFunctionToolParam(
+        type="function",
+        function=FunctionDefinition(
+            name="man_tool",
+            description="""\
+Get the manual page for a given command.
+
+Executes `man {command} | col -b` to get the manual page for the specified command.
+The `col -b` command is used to remove backspaces and formatting characters from the output of `man`
+to make it easier to read in the console.
+
+Use this tool to get information about shell commands exposed via other tools, for example the
+`eza` command used in the `eza_tool` and `bc` command used in the `bc_tool`, or to get general
+information about any other command available on the system.
+""",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The command to get the manual page for.",
+                    }
+                },
+                "required": ["command"],
+                "additionalProperties": False,
+            },
+        strict=True,
+        ),
+    )
+)
+def man_tool(command: str) -> str:
+    """Get the manual page for a given command."""
+    console.print(f"[bright_black]Executing man_tool(command={command})...[/bright_black]")
+    sp = subprocess.run(
+        f"man {command} | col -b",  # Use col -b to remove backspaces and formatting characters
+        shell=True,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return sp.stdout if sp.returncode == 0 else f"Error executing man_tool: {sp.stderr}"

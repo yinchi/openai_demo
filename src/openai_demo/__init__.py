@@ -195,7 +195,7 @@ def main() -> None:
             # Handle Ctrl+D / EOF to exit the program gracefully
             print()
             return
-        
+
         user_input = user_input.strip()
 
         if not user_input:
@@ -204,7 +204,7 @@ def main() -> None:
 
         if user_input.lower() in {"/exit", "/quit"}:
             return
-        
+
         # Other slash commands, e.g. /reset to reset conversation history
         if user_input.startswith("/"):
             command = user_input.split()[0][1:].lower()  # Get the command without the leading slash
@@ -221,7 +221,7 @@ def main() -> None:
         # conversation history
         if user_input.startswith("!"):
             shell_command = user_input[1:]
-            subprocess.run(["bash", "-c", shell_command])
+            subprocess.run(["bash", "-c", shell_command], check=False)
             continue
 
         messages.append(ChatCompletionUserMessageParam(role="user", content=user_input))
