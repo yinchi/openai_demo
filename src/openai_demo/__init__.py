@@ -223,7 +223,7 @@ def main() -> None:
             # Empty prompt, prompt again without calling the API
             continue
 
-        if user_input.lower() in {"/exit", "/quit"}:
+        if user_input.lower() in {"/exit", "/quit", "/bye"}:
             return
 
         # Other slash commands, e.g. /reset to reset conversation history
