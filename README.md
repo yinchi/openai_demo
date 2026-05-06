@@ -6,6 +6,7 @@ with:
 - tool support
 - conversation history (with /reset command to reset history)
 - Markdown rendering
+- web search tool using the Brave Search API
 
 ![screenshot of the demo](image.png)
 
@@ -25,12 +26,13 @@ OPENAI_URL=http://localhost:8000/v1
 OPENAI_KEY=dummy_key
 OPENAI_MODEL=google/gemma-4-26B-A4B-it
 HF_TOKEN=hf_...
+BRAVE_TOKEN=...
 ```
 
 Note that the supplied `gemma.sh` script is designed to work with vLLM and the Gemma 4 model, so
 the default values in `.env.example` are set accordingly.  However, any OpenAI-compatible API
 endpoint and model should work.  For local models, `OPENAI_KEY` can generally be set to any
-non-empty value, as authentication is often not required.clea
+non-empty value, as authentication is often not required.
 
 ### Set up the vLLM server
 

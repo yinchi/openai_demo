@@ -4,8 +4,9 @@ import json
 import os
 import shlex
 import subprocess
+import requests
 from collections.abc import Callable
-from typing import ParamSpec
+from typing import Literal, ParamSpec
 
 from openai.types.chat import (
     ChatCompletionFunctionToolParam,
@@ -499,3 +500,95 @@ def python_file_tool(path: str, tool_args: str) -> str:
         )
     except Exception as e:
         return json.dumps({"error": f"Error executing code: {e}"})
+
+
+SearchFreshness = Literal["pd", "pw", "pm", "py"]  # past day, week, month, year
+
+@register_tool(
+    ChatCompletionFunctionToolParam(
+        type="function",
+        function=FunctionDefinition(
+            name="brave_search",
+            description="""\
+Perform a search using the Brave Search API and return the results.
+
+The tool takes a search query and an optional freshness parameter that specifies the time range for
+the search results. The freshness parameter can be one of "pd" (past day), "pw" (past week), "pm"
+(past month), or "py" (past year). If the freshness parameter is not provided, it defaults to "py".
+
+The tool prompts the user for confirmation before performing the search to limit unnecessary API
+calls. If the user confirms, the tool makes a request to the Brave Search API and returns the
+search results as a JSON object. If the user does not confirm, the tool returns a JSON object with
+a `refused` field.
+
+The Brave Search API token must be provided in the `BRAVE_TOKEN` environment variable. If the token
+is not found, the tool returns a JSON object with an `error` field describing the error.
+If the API request fails or returns an unexpected response, the tool returns a JSON object with an
+`error` field describing the error.
+
+For successful search requests, the tool returns a JSON object with a `results` field containing a
+list of search results. Each search result is an object with `title`, `url`, `description`, and
+`extra_snippets` fields.
+""",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query.",
+                    },
+                    "freshness": {
+                        "type": "string",
+                        "enum": ["pd", "pw", "pm", "py"],
+                        "description": """\
+The time range for the search results. Can be one of "pd" (past day), "pw" (past week), "pm"
+(past month), or "py" (past year). Defaults to "py".""",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+    )
+)
+def brave_search(query: str, freshness: SearchFreshness = "py") -> str:
+    """Perform a search using the Brave Search API and return the results."""
+    console.print(f"[bright_black]Performing Brave Search: (query: {query}, freshness: {freshness})...[/bright_black]")
+    brave_token = os.getenv("BRAVE_TOKEN")
+    if not brave_token:
+        return json.dumps(
+            {"error": "Brave Search API token not found in  environment variable BRAVE_TOKEN."}
+        )
+    if not prompt.Confirm.ask(f"[bold red]Perform Brave Search for query: {query}?[/bold red]", default=False):
+        return json.dumps({"refused": "Search cancelled by user."})
+    
+    headers = {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip",
+        "X-Subscription-Token": brave_token,
+    }
+
+    params = {
+        "q": query,
+        "count": 5,
+        "result_filter": "web",
+        "freshness": freshness,
+        "extra_snippets": "true",
+    }
+
+    response = requests.get("https://api.search.brave.com/res/v1/web/search", headers=headers, params=params)
+    if response.status_code != 200:
+        return json.dumps({"error": f"Brave Search API request failed with status code {response.status_code}: {response.text}"})
+
+    web_results = response.json().get("web", {}).get("results", [])
+    # For each result, we return the title, url, description, and extra_snippets (if available)
+    results = [
+        {
+            "title": result.get("title"),
+            "url": result.get("url"),
+            "description": result.get("description"),
+            "extra_snippets": result.get("extra_snippets", []),
+        }
+        for result in web_results
+    ]
+
+    return json.dumps({"results": results})
