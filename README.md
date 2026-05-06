@@ -11,30 +11,33 @@ with:
 
 ## Setup
 
-### Set up the LM Studio API server
-
-1. Download and install the LM Studio API server:
-   ```bash
-   curl -fsSL https://lmstudio.ai/install.sh | bash
-   ```
-2. Download and launch a model:
-   ```bash
-   lms get google/gemma-4-26b-a4b
-   lms load --gpu max -c 256000 --ttl 360000 google/gemma-4-26b-a4b
-   ```
-3. Start the API server:
-   ```bash
-   lms server start
-   ```
-
 ### Set up `.env`
 
 ```bash
 cp .env.example .env
 ```
 
-Then edit the `.env` file to set the correct values for `OPENAI_URL`, `OPENAI_KEY`, and `OPENAI_MODEL`.
-For local models such as LM Studio, the `OPENAI_KEY` can be set to any dummy value since authentication is not required.
+Then edit the `.env` file to set up the correct values for the environment variables.
+Use shell-style assignments with no spaces around `=`:
+
+```bash
+OPENAI_URL=http://localhost:8000/v1
+OPENAI_KEY=dummy_key
+OPENAI_MODEL=google/gemma-4-26B-A4B-it
+HF_TOKEN=hf_...
+```
+
+Note that the supplied `gemma.sh` script is designed to work with vLLM and the Gemma 4 model, so
+the default values in `.env.example` are set accordingly.  However, any OpenAI-compatible API
+endpoint and model should work.  For local models, `OPENAI_KEY` can generally be set to any
+non-empty value, as authentication is often not required.clea
+
+### Set up the vLLM server
+
+```bash
+uv tool install vllm --torch-backend auto -p 3.13
+nohup ./gemma.sh &
+```
 
 ### Run the demo
 

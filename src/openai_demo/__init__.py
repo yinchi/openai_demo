@@ -4,6 +4,7 @@ Executes a simple prompt loop with tools and Markdown rendering in the terminal 
 """
 
 import json
+import re
 import shlex
 import subprocess
 
@@ -38,6 +39,23 @@ You will have access to a session-scoped temporary directory. Get the path for t
 using the `get_temp_dir` tool.  You can read, write, and list files in the temporary directory and
 the current working directory only (and their subdirectories).
 """
+
+# Regular expression to match and remove internal reasoning markers leaking into content.
+# Currently tested for Gemma 4, but may need to be updated for other models or future versions.
+CHANNEL_MARKER_RE = re.compile(
+    r"^\s*(?:<\|?channel\|?>\s*[a-z_]+\s*<\|?channel\|?>\s*)+",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_assistant_content(content: str | None) -> str | None:
+    """Remove internal reasoning markers that some local models leak into content."""
+    if content is None:
+        return None
+
+    sanitized = CHANNEL_MARKER_RE.sub("", content)
+    sanitized = sanitized.strip()
+    return sanitized or None
 
 
 def _execute_tool_call(tool_call: ChatCompletionMessageFunctionToolCall) -> str:
@@ -114,11 +132,13 @@ def _handle_prompt(
     # While the response contains tool calls, execute them, append the results to the conversation,
     # and re-query for a new response.
     while response_message.tool_calls:
+        assistant_content = _sanitize_assistant_content(response_message.content)
+
         # Append the assistant message with the tool calls to the conversation history.
         messages.append(
             ChatCompletionAssistantMessageParam(
                 role="assistant",
-                content=response_message.content,
+                content=assistant_content,
                 tool_calls=list(map(tool_call_to_param, response_message.tool_calls)),
             )
         )
@@ -164,11 +184,12 @@ def _handle_prompt(
         response_message = response.choices[0].message
 
     # Once there are no more tool calls, display the final response content.
-    if response_message.content:
+    assistant_content = _sanitize_assistant_content(response_message.content)
+    if assistant_content:
         messages.append(
-            ChatCompletionAssistantMessageParam(role="assistant", content=response_message.content)
+            ChatCompletionAssistantMessageParam(role="assistant", content=assistant_content)
         )
-        console.print(Markdown(response_message.content))
+        console.print(Markdown(assistant_content))
     elif response_message.refusal:
         messages.append(
             ChatCompletionAssistantMessageParam(role="assistant", refusal=response_message.refusal)
